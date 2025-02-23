@@ -14,7 +14,7 @@ CORS(app)  # Allow frontend requests
 DB_CONFIG = os.getenv("DATABASE_URL")  # Use environment variable
 
 def get_db_connection():
-    return psycopg2.connect(DB_CONFIG)
+    return psycopg2.connect(DB_CONFIG, sslmode="require")
 
 #Price comparison across stores
 @app.route('/search', methods=['GET'])
