@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./HomePage.css";
 import ItemSearch from "./components/ItemSearch";  
+import API_BASE_URL from "./config";
 
 const HomePage = () => {
   const [stores, setStores] = useState([]);
@@ -9,7 +10,7 @@ const HomePage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch("http://127.0.0.1:5000/stores")
+    fetch(`${API_BASE_URL}/stores`)
       .then((res) => res.json())
       .then((data) => setStores(data))
       .catch((err) => console.error("Error fetching stores:", err));
@@ -21,7 +22,7 @@ const HomePage = () => {
     const queryString = itemList.map(encodeURIComponent).join(",");
     console.log("Searching for:", queryString);
 
-    fetch(`http://127.0.0.1:5000/search?query=${queryString}`)
+    fetch(`${API_BASE_URL}/search?query=${queryString}`)
       .then((res) => res.json())
       .then((data) => {
         console.log("Search results:", data);

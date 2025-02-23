@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import { FaShoppingCart } from "react-icons/fa";
 import "./GroceryList.css"; // Import the CSS file
+import API_BASE_URL from "./config";
 
 const GroceryList = () => {
     const [items, setItems] = useState("");
@@ -10,7 +11,7 @@ const GroceryList = () => {
     const checkProducts = async () => {
         const itemList = items.split(",").map(item => item.trim());
         try {
-            const response = await axios.post("http://127.0.0.1:5000/check_products", { items: itemList });
+            const response = await axios.post(`${API_BASE_URL}/check_products`, { items: itemList });
             setResults(response.data);
         } catch (error) {
             console.error("Error fetching data:", error);

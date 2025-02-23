@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import API_BASE_URL from "./config";
 
 const UploadPage = () => {
   const [stores, setStores] = useState([]);
@@ -8,7 +9,7 @@ const UploadPage = () => {
 
   // Fetch store list from backend
   useEffect(() => {
-    fetch("http://127.0.0.1:5000/stores")
+    fetch(`${API_BASE_URL}/stores`)
       .then(response => response.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -32,7 +33,7 @@ const UploadPage = () => {
       price: parseFloat(price)
     };
 
-    fetch("http://127.0.0.1:5000/upload_product", {
+    fetch(`${API_BASE_URL}/upload_product`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

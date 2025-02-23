@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import "./StorePage.css";
+import API_BASE_URL from "./config";
 
 const StorePage = () => {
   const { storeId } = useParams();
   const [storeData, setStoreData] = useState(null);
 
   useEffect(() => {
-    fetch(`http://127.0.0.1:5000/store/${storeId}`)
+    fetch(`${API_BASE_URL}/store/${storeId}`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
         return res.json();

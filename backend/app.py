@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import pandas as pd
+import os
 from flask_cors import CORS # type: ignore
 import psycopg2 # type: ignore
 
@@ -178,4 +179,5 @@ def get_store_flyers(store_id):
     return jsonify(flyers)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port, debug=True)
