@@ -11,16 +11,10 @@ CORS(app)  # Allow frontend requests
 #df = pd.read_csv("products.csv")  # Contains product names, prices, stores
 # PostgreSQL connection
 
-DB_CONFIG = {
-    "dbname": "postgres",
-    "user": "postgres",
-    "password": "password",
-    "host": "db.fpgilwjlwkzzmlwrylpk.supabase.co",
-    "port": "5432"
-}
+DB_CONFIG = os.getenv("DATABASE_URL")  # Use environment variable
 
 def get_db_connection():
-    return psycopg2.connect(**DB_CONFIG)
+    return psycopg2.connect(DB_CONFIG)
 
 #Price comparison across stores
 @app.route('/search', methods=['GET'])
