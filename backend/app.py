@@ -13,20 +13,32 @@ CORS(app)  # Allow frontend requests
 # PostgreSQL connection
 
 DB_CONFIG = os.getenv("DATABASE_URL")  # Use environment variable
+print("DB Config:", DB_CONFIG)
 
 def get_db_connection():
-    print("Connecting to DB:", DB_CONFIG)
-    up.uses_netloc.append("postgres")
-    url = up.urlparse(DB_CONFIG)
+    if not DB_CONFIG:
+        print("ERROR: DATABASE_URL is not set!")
+        return None
 
-    return psycopg2.connect(
-        database=url.path[1:],
-        user=url.username,
-        password=url.password,
-        host=url.hostname,
-        port=url.port,
-        sslmode="require"
-    )
+    print("Connecting to DB:", DB_CONFIG)  # Debugging: Check if the function runs
+
+    try:
+        up.uses_netloc.append("postgres")
+        url = up.urlparse(DB_CONFIG)
+
+        conn = psycopg2.connect(
+            database=url.path[1:],
+            user=url.username,
+            password=url.password,
+            host=url.hostname,
+            port=url.port,
+            sslmode="require"
+        )
+        print("Successfully connected to the database!")
+        return conn
+    except Exception as e:
+        print(f"Database connection failed: {e}")
+        return None
 
 #Price comparison across stores
 @app.route('/search', methods=['GET'])
