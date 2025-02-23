@@ -3,6 +3,7 @@ import pandas as pd
 import os
 from flask_cors import CORS # type: ignore
 import psycopg2 # type: ignore
+import urllib.parse as up
 
 app = Flask(__name__)
 CORS(app)  # Allow frontend requests
@@ -14,7 +15,18 @@ CORS(app)  # Allow frontend requests
 DB_CONFIG = os.getenv("DATABASE_URL")  # Use environment variable
 
 def get_db_connection():
-    return psycopg2.connect(DB_CONFIG, sslmode="require")
+    print("Connecting to DB:", DB_CONFIG)
+    up.uses_netloc.append("postgres")
+    url = up.urlparse(DB_CONFIG)
+
+    return psycopg2.connect(
+        database=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port,
+        sslmode="require"
+    )
 
 #Price comparison across stores
 @app.route('/search', methods=['GET'])
