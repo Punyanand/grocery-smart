@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+
+# Node.js (for frontend)
+node_modules/
+build/

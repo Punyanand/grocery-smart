@@ -1,0 +1,54 @@
+.home-container {
+    text-align: center;
+    padding: 20px;
+  }
+  
+  .homepage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  
+  .store-section {
+    width: 100%;
+    max-width: 1200px;  /* Keeps content centered */
+    margin: 0 auto;
+  }
+  
+  .store-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;  /* Aligns store cards from left to right */
+    gap: 20px;
+  }
+  
+  
+  .store-card {
+    background: #f8f8f8;
+    border-radius: 10px;
+    padding: 15px;
+    width: 150px;
+    text-align: center;
+    cursor: pointer;
+    transition: 0.3s;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  
+  .store-card:hover {
+    background: #e0f7fa;
+  }
+  
+  .store-icon {
+    width: 100px;
+    height: 100px;
+    object-fit: contain;
+  }
+  body, html {
+    height: 100vh;
+  }
+  
+
+  
