@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import "./HomePage.css";
 import API_BASE_URL from "./config";
 import { Container, TextField, Typography, Paper, IconButton, List, ListItem, ListItemText, Grid, Card, CardContent, CardMedia, Button } from "@mui/material";
 import { Delete } from "@mui/icons-material";
