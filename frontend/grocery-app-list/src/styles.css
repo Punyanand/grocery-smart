@@ -18,7 +18,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: #9754d9;
+    background: hsl(65, 5%, 43%);
     padding: 15px 20px;
     color: white;
   }
