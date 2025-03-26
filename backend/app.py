@@ -11,6 +11,8 @@ from werkzeug.utils import secure_filename
 import time
 import logging
 import traceback
+import requests
+from math import radians, sin, cos, sqrt, atan2
 logging.basicConfig(level=logging.DEBUG)
 
 load_dotenv()
@@ -274,8 +276,458 @@ def upload_flyer():
         print("Upload error:", str(e))
         traceback.print_exc()  # Prints full error traceback
         return jsonify({"error": str(e)}), 500
-    
 
+# Function to get ZIP code coordinates
+def get_zip_coordinates(zip_code):
+    try:
+        # Using the free ZIP code API
+        response = requests.get(f"https://api.zippopotam.us/us/{zip_code}")
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                "lat": float(data["places"][0]["latitude"]),
+                "lng": float(data["places"][0]["longitude"])
+            }
+        return None
+    except Exception as e:
+        print(f"Error getting coordinates for ZIP code: {e}")
+        return None
+
+# Calculate distance between two ZIP codes using Haversine formula
+def calculate_distance(lat1, lon1, lat2, lon2):
+    R = 3959.87433  # Earth's radius in miles
+
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+    
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1-a))
+    distance = R * c
+    
+    return round(distance, 2)
+
+# Get stores sorted by distance from user's ZIP code
+@app.route('/stores/by-distance/<user_zip>', methods=['GET'])
+def get_stores_by_distance(user_zip):
+    try:
+        # Get user's coordinates
+        user_coords = get_zip_coordinates(user_zip)
+        if not user_coords:
+            return jsonify({"error": "Invalid ZIP code"}), 400
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get all stores
+        cur.execute("SELECT id, name, zip_code FROM stores")
+        stores = cur.fetchall()
+        
+        # Calculate distances and sort stores
+        stores_with_distance = []
+        for store in stores:
+            store_id, store_name, store_zip = store
+            store_coords = get_zip_coordinates(store_zip)
+            
+            if store_coords:
+                distance = calculate_distance(
+                    user_coords["lat"], user_coords["lng"],
+                    store_coords["lat"], store_coords["lng"]
+                )
+                
+                stores_with_distance.append({
+                    "id": store_id,
+                    "name": store_name,
+                    "zip_code": store_zip,
+                    "distance": distance
+                })
+        
+        # Sort stores by distance
+        stores_with_distance.sort(key=lambda x: x["distance"])
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify(stores_with_distance)
+    
+    except Exception as e:
+        print(f"Error in get_stores_by_distance: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# Modified compare_prices endpoint to include distance information
+@app.route('/api/compare-prices', methods=['POST'])
+def compare_prices():
+    try:
+        data = request.get_json()
+        print("Received request data:", data)  # Debug log
+        
+        items = data.get('items', [])
+        user_zip = data.get('userZip')
+        
+        print(f"Processing items: {items}, user_zip: {user_zip}")  # Debug log
+        
+        if not items:
+            return jsonify({"error": "No items provided"}), 400
+
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"error": "Database connection failed"}), 500
+            
+        cur = conn.cursor()
+        
+        # Create a placeholder string for the SQL IN clause
+        items_placeholder = ','.join(['%s'] * len(items))
+        
+        query = f"""
+            SELECT p.name, s.name as store_name, p.price, s.zip_code
+            FROM products p
+            JOIN stores s ON p.store_id = s.id
+            WHERE LOWER(p.name) IN ({items_placeholder})
+            ORDER BY p.name, p.price ASC
+        """
+        
+        # Convert items to lowercase for case-insensitive comparison
+        query_params = tuple(item.lower() for item in items)
+        print(f"Executing query with params: {query_params}")  # Debug log
+        
+        cur.execute(query, query_params)
+        data = cur.fetchall()
+        print(f"Query returned {len(data)} rows")  # Debug log
+        
+        cur.close()
+        conn.close()
+
+        # Process data into best price format with actual savings calculation
+        comparisons = {}
+        total_best_price = 0
+        
+        # Get user coordinates if ZIP provided
+        user_coords = get_zip_coordinates(user_zip) if user_zip else None
+        
+        # First pass to find the price range for each product
+        for product_name, store_name, price, store_zip in data:
+            store_distance = None
+            if user_coords and store_zip:
+                store_coords = get_zip_coordinates(store_zip)
+                if store_coords:
+                    store_distance = calculate_distance(
+                        user_coords["lat"], user_coords["lng"],
+                        store_coords["lat"], store_coords["lng"]
+                    )
+
+            if product_name not in comparisons:
+                comparisons[product_name] = {
+                    "bestStore": store_name,
+                    "bestPrice": float(price),  # Convert to float
+                    "worstPrice": float(price),  # Convert to float
+                    "bestStoreDistance": store_distance,
+                    "allPrices": [(store_name, float(price), store_distance)]  # Convert to float
+                }
+            else:
+                comparisons[product_name]["allPrices"].append((store_name, float(price), store_distance))
+                if price < comparisons[product_name]["bestPrice"]:
+                    comparisons[product_name]["bestPrice"] = float(price)
+                    comparisons[product_name]["bestStore"] = store_name
+                    comparisons[product_name]["bestStoreDistance"] = store_distance
+                if price > comparisons[product_name]["worstPrice"]:
+                    comparisons[product_name]["worstPrice"] = float(price)
+
+        # Calculate savings and format response
+        result = []
+        for product_name, data in comparisons.items():
+            savings = data["worstPrice"] - data["bestPrice"]
+            total_best_price += data["bestPrice"]
+            
+            result.append({
+                "product": product_name,
+                "bestStore": data["bestStore"],
+                "bestPrice": data["bestPrice"],
+                "bestStoreDistance": data["bestStoreDistance"],
+                "savings": round(savings, 2),
+                "allPrices": data["allPrices"]
+            })
+
+        response_data = {
+            "items": result,
+            "totalBestPrice": round(total_best_price, 2)
+        }
+        print("Sending response:", response_data)  # Debug log
+        return jsonify(response_data)
+
+    except Exception as e:
+        print(f"Error in compare_prices: {str(e)}")
+        print("Traceback:", traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
+
+def optimize_shopping_stops(items, user_zip):
+    try:
+        print(f"Optimizing shopping stops for items: {items}")
+        print(f"User ZIP: {user_zip}")
+        
+        if not items:
+            return {"error": "No items provided"}, 400
+            
+        if not user_zip:
+            return {"error": "ZIP code is required for optimization"}, 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Get coordinates for user's ZIP code
+        user_coords = get_zip_coordinates(user_zip)
+        if not user_coords:
+            return {"error": "Invalid ZIP code"}, 400
+
+        # Get prices for all items at all stores
+        placeholders = ','.join(['%s'] * len(items))
+        query = f"""
+            SELECT p.store_id, p.name as product_name, p.price, s.name as store_name, s.zip_code
+            FROM products p
+            JOIN stores s ON p.store_id = s.id
+            WHERE LOWER(p.name) IN ({placeholders})
+        """
+        print(f"Executing query: {query}")
+        print(f"With parameters: {[item.lower() for item in items]}")
+        
+        cursor.execute(query, [item.lower() for item in items])
+        prices = cursor.fetchall()
+        print(f"Found {len(prices)} price entries")
+
+        if not prices:
+            return {"error": "No items found in any stores"}, 404
+
+        # Group prices by store
+        store_prices = {}
+        for price in prices:
+            store_id = price[0]
+            if store_id not in store_prices:
+                store_prices[store_id] = {
+                    'name': price[3],
+                    'zip_code': price[4],
+                    'items': {}
+                }
+            store_prices[store_id]['items'][price[1]] = float(price[2])  # Convert price to float
+
+        print(f"Found {len(store_prices)} stores with items")
+        for store_id, store_data in store_prices.items():
+            print(f"Store {store_data['name']} has {len(store_data['items'])} items")
+
+        # Calculate distances from user's location to each store
+        for store_id, store_data in store_prices.items():
+            store_coords = get_zip_coordinates(store_data['zip_code'])
+            if store_coords:
+                store_data['distance'] = calculate_distance(
+                    user_coords["lat"], user_coords["lng"],
+                    store_coords["lat"], store_coords["lng"]
+                )
+            else:
+                store_data['distance'] = float('inf')
+
+        # Strategy 1: Price-optimized (best price for each item)
+        price_optimized = find_price_optimized_stops(store_prices, items)
+        print("Price optimized result:", price_optimized)
+        
+        # Strategy 2: Distance-optimized (closest stores first)
+        distance_optimized = find_distance_optimized_stops(store_prices, items)
+        print("Distance optimized result:", distance_optimized)
+        
+        # Strategy 3: Convenience-optimized (minimum stops)
+        convenience_optimized = find_optimal_stops(store_prices, items)
+        print("Convenience optimized result:", convenience_optimized)
+
+        # Format response with all three strategies
+        response = {
+            "price_optimized": {
+                "stores": price_optimized["stores"],
+                "total_cost": float(price_optimized["total_cost"]),  # Ensure it's a number
+                "total_distance": float(price_optimized["total_distance"]),  # Ensure it's a number
+                "item_breakdown": price_optimized["item_breakdown"]
+            },
+            "distance_optimized": {
+                "stores": distance_optimized["stores"],
+                "total_cost": float(distance_optimized["total_cost"]),  # Ensure it's a number
+                "total_distance": float(distance_optimized["total_distance"]),  # Ensure it's a number
+                "item_breakdown": distance_optimized["item_breakdown"]
+            },
+            "convenience_optimized": {
+                "stores": convenience_optimized["stores"],
+                "total_cost": float(convenience_optimized["total_cost"]),  # Ensure it's a number
+                "total_distance": float(convenience_optimized["total_distance"]),  # Ensure it's a number
+                "item_breakdown": convenience_optimized["item_breakdown"]
+            }
+        }
+
+        print("Final optimization response:", response)
+        return response
+
+    except Exception as e:
+        print(f"Error in optimize_shopping_stops: {str(e)}")
+        print("Traceback:", traceback.format_exc())
+        return {"error": str(e)}, 500
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
+def find_price_optimized_stops(store_prices, items):
+    """Find the best price for each item, regardless of store."""
+    result = {
+        "stores": [],
+        "total_cost": 0,
+        "total_distance": 0,
+        "item_breakdown": {}
+    }
+    
+    print(f"Finding price-optimized stops for items: {items}")
+    print(f"Available stores: {[store_data['name'] for store_data in store_prices.values()]}")
+    
+    # Find best price for each item
+    for item in items:
+        best_price = float('inf')
+        best_store = None
+        
+        for store_id, store_data in store_prices.items():
+            # Create case-insensitive mapping of items
+            store_items = {k.lower(): (k, v) for k, v in store_data['items'].items()}
+            if item.lower() in store_items:
+                original_name, price = store_items[item.lower()]
+                if price < best_price:
+                    best_price = price
+                    best_store = store_id
+        
+        if best_store is not None:
+            if best_store not in result["stores"]:
+                result["stores"].append(best_store)
+            result["total_cost"] += best_price
+            result["item_breakdown"][item] = {
+                "store": store_prices[best_store]["name"],
+                "price": best_price
+            }
+            print(f"Found {item} at {store_prices[best_store]['name']} for ${best_price}")
+    
+    # Calculate total distance
+    for store_id in result["stores"]:
+        result["total_distance"] += store_prices[store_id]["distance"]
+    
+    print(f"Price-optimized result: {result}")
+    return result
+
+def find_distance_optimized_stops(store_prices, items):
+    """Find stores to visit based on distance, getting items from closest stores first."""
+    result = {
+        "stores": [],
+        "total_cost": 0,
+        "total_distance": 0,
+        "item_breakdown": {}
+    }
+    
+    print(f"Finding distance-optimized stops for items: {items}")
+    
+    # Sort stores by distance
+    sorted_stores = sorted(
+        store_prices.items(),
+        key=lambda x: x[1]['distance']
+    )
+    
+    remaining_items = set(items)
+    print(f"Remaining items: {remaining_items}")
+    
+    # Try to get items from closest stores first
+    for store_id, store_data in sorted_stores:
+        if not remaining_items:
+            break
+            
+        # Create case-insensitive mapping of items
+        store_items = {k.lower(): (k, v) for k, v in store_data['items'].items()}
+        available_items = {item for item in remaining_items if item.lower() in store_items}
+        
+        if available_items:
+            result["stores"].append(store_id)
+            result["total_distance"] += store_data["distance"]
+            
+            for item in available_items:
+                original_name, price = store_items[item.lower()]
+                result["total_cost"] += price
+                result["item_breakdown"][item] = {
+                    "store": store_data["name"],
+                    "price": price
+                }
+                print(f"Found {item} at {store_data['name']} for ${price}")
+            
+            remaining_items -= available_items
+    
+    print(f"Distance-optimized result: {result}")
+    return result
+
+def find_optimal_stops(store_prices, items):
+    """Find the minimum number of stores to visit."""
+    result = {
+        "stores": [],
+        "total_cost": 0,
+        "total_distance": 0,
+        "item_breakdown": {}
+    }
+    
+    print(f"Finding convenience-optimized stops for items: {items}")
+    
+    # First, find stores that have the most items
+    store_coverage = {}
+    for store_id, store_data in store_prices.items():
+        # Create case-insensitive mapping of items
+        store_items = {k.lower(): (k, v) for k, v in store_data['items'].items()}
+        coverage = len({item for item in items if item.lower() in store_items})
+        if coverage > 0:
+            store_coverage[store_id] = coverage
+    
+    print(f"Store coverage: {store_coverage}")
+    
+    # Sort stores by coverage (descending) and then by distance
+    sorted_stores = sorted(
+        store_coverage.items(),
+        key=lambda x: (-x[1], store_prices[x[0]]['distance'])
+    )
+    
+    remaining_items = set(items)
+    print(f"Remaining items: {remaining_items}")
+    
+    # Try to get items from stores with the most coverage first
+    for store_id, _ in sorted_stores:
+        if not remaining_items:
+            break
+            
+        store_data = store_prices[store_id]
+        # Create case-insensitive mapping of items
+        store_items = {k.lower(): (k, v) for k, v in store_data['items'].items()}
+        available_items = {item for item in remaining_items if item.lower() in store_items}
+        
+        if available_items:
+            result["stores"].append(store_id)
+            result["total_distance"] += store_data["distance"]
+            
+            for item in available_items:
+                original_name, price = store_items[item.lower()]
+                result["total_cost"] += price
+                result["item_breakdown"][item] = {
+                    "store": store_data["name"],
+                    "price": price
+                }
+                print(f"Found {item} at {store_data['name']} for ${price}")
+            
+            remaining_items -= available_items
+    
+    print(f"Convenience-optimized result: {result}")
+    return result
+
+@app.route('/api/optimize-stops', methods=['POST'])
+def optimize_stops():
+    data = request.get_json()
+    items = data.get('items', [])
+    user_zip = data.get('userZip')
+    
+    result = optimize_shopping_stops(items, user_zip)
+    if isinstance(result, tuple):
+        return jsonify(result[0]), result[1]
+    return jsonify(result)
 
 @app.route('/')
 def home():
