@@ -46,9 +46,20 @@ const UploadPage = () => {
     })
       .then(response => response.json())
       .then(data => {
-        alert(data.message || "Product uploaded successfully!");
+        if (data.error) {
+          alert(data.error);
+          return;
+        }
+        alert(data.message);
+        // Clear form after successful upload
+        setProductName("");
+        setPrice("");
+        setQuantity("");
       })
-      .catch(error => console.error("Error uploading product:", error));
+      .catch(error => {
+        console.error("Error uploading product:", error);
+        alert("Error uploading product. Please try again.");
+      });
   };
 
   // Handle Flyer Upload
