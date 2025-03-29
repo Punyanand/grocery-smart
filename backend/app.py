@@ -198,22 +198,49 @@ def upload_product():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # Check if the store exists
-    cur.execute("SELECT id FROM stores WHERE id = %s;", (store_id,))
-    if cur.fetchone() is None:
+    try:
+        # Check if the store exists
+        cur.execute("SELECT id FROM stores WHERE id = %s;", (store_id,))
+        if cur.fetchone() is None:
+            return jsonify({"error": "Store ID does not exist"}), 400
+
+        # Check if the product with exact same name and quantity exists for this store
+        cur.execute("""
+            SELECT id FROM products 
+            WHERE name = %s AND store_id = %s AND quantity = %s;
+        """, (name, store_id, quantity))
+        existing_product = cur.fetchone()
+
+        if existing_product:
+            # Update existing product only if name and quantity match exactly
+            cur.execute("""
+                UPDATE products 
+                SET price = %s 
+                WHERE id = %s
+                RETURNING id;
+            """, (price, existing_product[0]))
+            product_id = existing_product[0]
+            message = "Product price updated successfully"
+        else:
+            # Insert new product if no exact match found
+            cur.execute("""
+                INSERT INTO products (name, store_id, price, quantity) 
+                VALUES (%s, %s, %s, %s) 
+                RETURNING id;
+            """, (name, store_id, price, quantity))
+            product_id = cur.fetchone()[0]
+            message = "New product added successfully"
+
+        conn.commit()
+        return jsonify({"message": message, "product_id": product_id}), 201
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+
+    finally:
         cur.close()
         conn.close()
-        return jsonify({"error": "Store ID does not exist"}), 400
-
-    # Insert the product
-    cur.execute("INSERT INTO products (name, store_id, price, quantity) VALUES (%s, %s, %s, %s) RETURNING id;", 
-                (name, store_id, price, quantity))
-    product_id = cur.fetchone()[0]
-    conn.commit()
-    cur.close()
-    conn.close()
-    
-    return jsonify({"message": "Product uploaded successfully", "product_id": product_id}), 201
 
 #Upload flyer image
 @app.route('/upload_flyer', methods=['POST'])
