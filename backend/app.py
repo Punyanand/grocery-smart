@@ -25,8 +25,8 @@ CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True, allow_
 def add_cors_headers(response):
     """ Ensure CORS headers are applied to every response """
     response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
 
 # PostgreSQL connection
@@ -64,78 +64,19 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-#Price comparison across stores
-@app.route('/search', methods=['GET'])
-def search_products():
-    query = request.args.get("query", "").strip()
-    
-    if not query:
-        return jsonify({"error": "No search query provided"}), 400
-
-    items = query.split(",")
-    conn = get_db_connection()
-    cur = conn.cursor()
-    
-    results = []
-
-    for item in items:
-        item = item.strip().lower()
-        cur.execute("""
-            SELECT p.name, s.name AS store, p.price, p.quantity, s.zip_code 
-            FROM products p
-            JOIN stores s ON p.store_id = s.id
-            WHERE LOWER(p.name) = %s
-        """, (item,))
-
-        store_results = [{"store": row[1], "price": row[2], "quantity": row[3], "zip": row[4]} for row in cur.fetchall()]
-        
-        results.append({
-            "name": item.upper(),
-            "stores": store_results if store_results else []  # Empty array if no stores found
-        })
-
-    cur.close()
-    conn.close()
-    
-    return jsonify(results)
-
-
-@app.route('/check_products', methods=['POST'])
-def check_products():
-    data = request.get_json()
-    items = data.get("items", [])
-
-    results = []
-    for item in items:
-        matches = df[df["product_name"].str.lower() == item.lower()]  # Get all matching rows
-        available_stores = []
-        
-        for _, row in matches.iterrows():
-            if row["availability"].strip().lower() == "in stock":  # Only include available items
-                available_stores.append({
-                    "store": row["store"],
-                    "price": float(row["price"]),
-                    "zip": row["zip"]
-                })
-
-        if available_stores:  # If at least one store has the product in stock
-            results.append({
-                "name": item,
-                "stores": available_stores
-            })
-
-    return jsonify(results)
-
-
 #  Get list of all stores
 @app.route('/stores', methods=['GET'])
 def get_stores():
     conn = get_db_connection()
+    if not conn:
+        return jsonify({"error": "Database connection failed"}), 500
+        
     cur = conn.cursor()
-    cur.execute("SELECT id, name, zip_code FROM stores;")
+    cur.execute("SELECT * FROM stores ORDER BY id;")
     stores = [{"id": row[0], "name": row[1], "zip_code": row[2]} for row in cur.fetchall()]
     cur.close()
     conn.close()
+    
     return jsonify(stores)
 
 # Get store details, products, and flyers
@@ -174,18 +115,7 @@ def get_store_data(store_id):
     finally:
         cur.close()
         conn.close()
-
-#Test Supabase Storage Connection
-@app.route('/test_supabase_storage', methods=['GET'])
-def test_supabase_storage():
-    try:
-        response = supabase.storage.from_("flyers").list()
-        print("🗂 Supabase Storage Files:", response)  # Debugging
-        return jsonify({"files": response})
-    except Exception as e:
-        print("🚨 Supabase Storage Error:", str(e))
-        return jsonify({"error": str(e)}), 500
-    
+   
 #Upload product data (Crowdsourced)
 @app.route('/upload_product', methods=['POST'])
 def upload_product():
