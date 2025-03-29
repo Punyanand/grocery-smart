@@ -821,16 +821,16 @@ const HomePage = () => {
               >
                 <CardMedia
                   component="img"
-                  sx={{ width: 120, height: 120, objectFit: 'cover' }}
+                  sx={{ width: 100, height: 100, objectFit: 'cover' }}
                   image={`/images/stores/${store.id}.png`}
                   alt={store.name}
                 />
-                <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', p: 1.5 }}>
                   <div>
-                    <Typography variant="h6" gutterBottom sx={{ color: '#fff' }}>
+                    <Typography variant="subtitle1" gutterBottom sx={{ color: '#fff', mb: 0.5 }}>
                       {store.name}
                     </Typography>
-                    <Typography variant="body2" sx={{ color: '#999' }}>
+                    <Typography variant="body2" sx={{ color: '#999', fontSize: '0.8rem' }}>
                       ZIP: {store.zip_code}
                       {store.distance && (
                         <Box component="span" sx={{ ml: 1 }}>
@@ -843,7 +843,7 @@ const HomePage = () => {
                     variant="outlined" 
                     size="small"
                     sx={{ 
-                      mt: 1, 
+                      mt: 0.5, 
                       alignSelf: 'flex-start',
                       borderColor: '#666',
                       color: '#fff',
@@ -851,6 +851,8 @@ const HomePage = () => {
                         borderColor: '#90caf9',
                         color: '#90caf9',
                       },
+                      py: 0.5,
+                      px: 1
                     }} 
                     onClick={(e) => {
                       e.stopPropagation();
