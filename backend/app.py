@@ -47,7 +47,9 @@ def get_db_connection():
     except Exception as e:
         print(f"Database connection failed: {e}")
         return None
+
 app.register_blueprint(auth)
+
 
 #  Get list of all stores
 @app.route('/stores', methods=['GET'])
