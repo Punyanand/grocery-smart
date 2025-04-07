@@ -1,9 +1,8 @@
 from flask import Flask, request, jsonify
-import pandas as pd
 import os
 from flask_cors import CORS # type: ignore
-import psycopg2 # type: ignore
-import urllib.parse as up
+import mysql.connector
+from flask_jwt_extended import JWTManager
 from dotenv import load_dotenv
 from datetime import datetime, timezone
 from supabase import create_client
@@ -13,11 +12,15 @@ import logging
 import traceback
 import requests
 from math import radians, sin, cos, sqrt, atan2
+from auth import auth
+
 logging.basicConfig(level=logging.DEBUG)
 
 load_dotenv()
 
 app = Flask(__name__)
+app.config['JWT_SECRET_KEY'] = os.getenv("JWT_SECRET_KEY", "your_jwt_secret_key")
+jwt = JWTManager(app)
 
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True, allow_headers=["Content-Type"])
 
@@ -25,117 +28,40 @@ CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True, allow_
 def add_cors_headers(response):
     """ Ensure CORS headers are applied to every response """
     response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
 
-# PostgreSQL connection
-
-DB_CONFIG = os.getenv("DATABASE_URL")  # Use environment variable
-print("DB Config:", DB_CONFIG)
-
 def get_db_connection():
-    if not DB_CONFIG:
-        print("ERROR: DATABASE_URL is not set!")
-        return None
-
-    print("Connecting to DB:", DB_CONFIG)  # Debugging: Check if the function runs
 
     try:
-        up.uses_netloc.append("postgres")
-        url = up.urlparse(DB_CONFIG)
-
-        conn = psycopg2.connect(
-            database=url.path[1:],
-            user=url.username,
-            password=url.password,
-            host=url.hostname,
-            port=url.port,
-            sslmode="require"
+        conn = mysql.connector.connect(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306))
         )
         print("Successfully connected to the database!")
         return conn
     except Exception as e:
         print(f"Database connection failed: {e}")
         return None
-
-# Initialize Supabase
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-#Price comparison across stores
-@app.route('/search', methods=['GET'])
-def search_products():
-    query = request.args.get("query", "").strip()
-    
-    if not query:
-        return jsonify({"error": "No search query provided"}), 400
-
-    items = query.split(",")
-    conn = get_db_connection()
-    cur = conn.cursor()
-    
-    results = []
-
-    for item in items:
-        item = item.strip().lower()
-        cur.execute("""
-            SELECT p.name, s.name AS store, p.price, p.quantity, s.zip_code 
-            FROM products p
-            JOIN stores s ON p.store_id = s.id
-            WHERE LOWER(p.name) = %s
-        """, (item,))
-
-        store_results = [{"store": row[1], "price": row[2], "quantity": row[3], "zip": row[4]} for row in cur.fetchall()]
-        
-        results.append({
-            "name": item.upper(),
-            "stores": store_results if store_results else []  # Empty array if no stores found
-        })
-
-    cur.close()
-    conn.close()
-    
-    return jsonify(results)
-
-
-@app.route('/check_products', methods=['POST'])
-def check_products():
-    data = request.get_json()
-    items = data.get("items", [])
-
-    results = []
-    for item in items:
-        matches = df[df["product_name"].str.lower() == item.lower()]  # Get all matching rows
-        available_stores = []
-        
-        for _, row in matches.iterrows():
-            if row["availability"].strip().lower() == "in stock":  # Only include available items
-                available_stores.append({
-                    "store": row["store"],
-                    "price": float(row["price"]),
-                    "zip": row["zip"]
-                })
-
-        if available_stores:  # If at least one store has the product in stock
-            results.append({
-                "name": item,
-                "stores": available_stores
-            })
-
-    return jsonify(results)
-
+app.register_blueprint(auth)
 
 #  Get list of all stores
 @app.route('/stores', methods=['GET'])
 def get_stores():
     conn = get_db_connection()
+    if not conn:
+        return jsonify({"error": "Database connection failed"}), 500
+        
     cur = conn.cursor()
-    cur.execute("SELECT id, name, zip_code FROM stores;")
+    cur.execute("SELECT * FROM stores ORDER BY id;")
     stores = [{"id": row[0], "name": row[1], "zip_code": row[2]} for row in cur.fetchall()]
     cur.close()
     conn.close()
+    
     return jsonify(stores)
 
 # Get store details, products, and flyers
@@ -174,18 +100,7 @@ def get_store_data(store_id):
     finally:
         cur.close()
         conn.close()
-
-#Test Supabase Storage Connection
-@app.route('/test_supabase_storage', methods=['GET'])
-def test_supabase_storage():
-    try:
-        response = supabase.storage.from_("flyers").list()
-        print("🗂 Supabase Storage Files:", response)  # Debugging
-        return jsonify({"files": response})
-    except Exception as e:
-        print("🚨 Supabase Storage Error:", str(e))
-        return jsonify({"error": str(e)}), 500
-    
+   
 #Upload product data (Crowdsourced)
 @app.route('/upload_product', methods=['POST'])
 def upload_product():
