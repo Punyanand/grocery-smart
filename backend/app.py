@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import pandas as pd
 import os
+import re
 from flask_cors import CORS # type: ignore
 import psycopg2 # type: ignore
 import urllib.parse as up
@@ -101,7 +102,7 @@ def get_store_data(store_id):
 
         # Fetch flyers for this store
         cur.execute("SELECT image_url FROM flyers WHERE store_id = %s", (store_id,))
-        flyers = [{"image_url": row[0].replace("//", "/")} for row in cur.fetchall()]  # List of flyer image URLs
+        flyers = [{"image_url": re.sub(r'(?<!:)//', '/', row[0])} for row in cur.fetchall()]  # List of flyer image URLs
 
         return jsonify({
             "name": store_name,
