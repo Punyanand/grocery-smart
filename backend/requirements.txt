@@ -17,3 +17,6 @@ gunicorn
 requests
 python-dotenv==1.0.1
 supabase==2.13.0
+openai==0.28.0
+youtube-search==2.1.2
+httpx==0.27.2
