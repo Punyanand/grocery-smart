@@ -5,14 +5,9 @@ import { Container, TextField, Typography, Paper, IconButton, List, ListItem, Li
 import { Delete, LocationOn, ExpandMore, ExpandLess } from "@mui/icons-material";
 import StoreComparisonCard from "./StoreComparisonCard";
 
-const HomePage = () => {
+const HomePage = ({ groceryList, setGroceryList }) => {
   const [stores, setStores] = useState([]);
   const [userZip, setUserZip] = useState(""); 
-  const [groceryList, setGroceryList] = useState(() => {
-    // Initialize groceryList from localStorage if available, otherwise empty array
-    const savedList = localStorage.getItem('groceryList');
-    return savedList ? JSON.parse(savedList) : [];
-  });
   const [newItem, setNewItem] = useState("");
   const [showComparison, setShowComparison] = useState(false);
   const [comparisons, setComparisons] = useState({ items: [], totalBestPrice: 0 });
@@ -24,11 +19,6 @@ const HomePage = () => {
   const [showPriceComparison, setShowPriceComparison] = useState(true);
   const [showOptimization, setShowOptimization] = useState(true);
   const navigate = useNavigate();
-
-  // Save groceryList to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('groceryList', JSON.stringify(groceryList));
-  }, [groceryList]);
 
   // Fetch stores
   const fetchStores = async () => {
