@@ -14,6 +14,9 @@ import logging
 import traceback
 import requests
 from math import radians, sin, cos, sqrt, atan2
+import json
+import openai
+from youtube_search import YoutubeSearch
 logging.basicConfig(level=logging.DEBUG)
 
 load_dotenv()
@@ -65,7 +68,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-#  Get list of all stores
+# Get list of all stores
 @app.route('/stores', methods=['GET'])
 def get_stores():
     conn = get_db_connection()
@@ -686,6 +689,94 @@ def optimize_stops():
     if isinstance(result, tuple):
         return jsonify(result[0]), result[1]
     return jsonify(result)
+
+@app.route('/api/recipe-search', methods=['POST'])
+def recipe_search():
+    try:
+        data = request.get_json()
+        query = data.get('query')
+        
+        if not query:
+            return jsonify({'error': 'No search query provided'}), 400
+            
+        # Generate recipe using OpenAI
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": """You are a helpful recipe assistant. Provide recipes in a structured JSON format with:
+                - name: The recipe name
+                - ingredients: An array of clean ingredient names (just the ingredient, no measurements or descriptions)
+                - instructions: An array of cooking steps
+                
+                Important rules for ingredients:
+                1. List each vegetable separately, don't group them
+                2. Don't use parentheses or "like" in ingredient names
+                3. Don't use categories like "Vegetables" or "Spices"
+                4. Each ingredient should be a single item
+                
+                Example:
+                {
+                    "name": "Vegetable Curry",
+                    "ingredients": ["drumsticks", "carrots", "potatoes", "eggplant", "onions", "tomatoes", "ginger", "garlic", "turmeric", "cumin"],
+                    "instructions": ["Chop all vegetables...", "Heat oil in a pan..."]
+                }"""},
+                {"role": "user", "content": f"Give me a recipe for {query}. List each vegetable and ingredient separately without any grouping or categories."}
+            ],
+            temperature=0.7
+        )
+        
+        # Parse the response
+        try:
+            recipe_data = json.loads(response.choices[0].message.content)
+        except json.JSONDecodeError:
+            # If the response isn't valid JSON, try to extract the recipe data
+            content = response.choices[0].message.content
+            recipe_data = {
+                "name": "",
+                "ingredients": [],
+                "instructions": []
+            }
+            
+            # Try to find the recipe name
+            name_match = re.search(r'"name":\s*"([^"]+)"', content)
+            if name_match:
+                recipe_data["name"] = name_match.group(1)
+            
+            # Try to find ingredients array
+            ingredients_match = re.search(r'"ingredients":\s*\[(.*?)\]', content, re.DOTALL)
+            if ingredients_match:
+                ingredients_str = ingredients_match.group(1)
+                recipe_data["ingredients"] = [ing.strip(' "') for ing in ingredients_str.split(',')]
+            
+            # Try to find instructions array
+            instructions_match = re.search(r'"instructions":\s*\[(.*?)\]', content, re.DOTALL)
+            if instructions_match:
+                instructions_str = instructions_match.group(1)
+                recipe_data["instructions"] = [inst.strip(' "') for inst in instructions_str.split(',')]
+        
+        # Search for YouTube videos
+        video_links = search_youtube_videos(f"{query} recipe")
+        recipe_data["videoLinks"] = video_links
+        
+        return jsonify(recipe_data)
+        
+    except Exception as e:
+        print(f"Error in recipe search: {str(e)}")
+        return jsonify({'error': 'Failed to generate recipe'}), 500
+
+def search_youtube_videos(query, max_results=2):
+    try:
+        results = YoutubeSearch(query, max_results=max_results).to_dict()
+        return [
+            {
+                "title": result["title"],
+                "url": f"https://www.youtube.com/watch?v={result['id']}"
+            }
+            for result in results
+        ]
+    except Exception as e:
+        print(f"Error searching YouTube videos: {str(e)}")
+        return []
 
 @app.route('/')
 def home():
