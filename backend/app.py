@@ -26,13 +26,15 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# Configure CORS with specific options
-CORS(app, resources={r"/*": {
-    "origins": ["http://localhost:3000"],
-    "methods": ["GET", "POST", "OPTIONS"],
-    "allow_headers": ["Content-Type", "Authorization"],
-    "supports_credentials": True
-}})
+# Configure CORS
+CORS(app, resources={
+    r"/*": {
+        "origins": ["http://localhost:3000", "https://grocery-smart.vercel.app"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True
+    }
+})
 
 @app.after_request
 def add_cors_headers(response):
