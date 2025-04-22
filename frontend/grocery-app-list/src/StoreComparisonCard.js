@@ -38,42 +38,42 @@ const StoreComparisonCard = ({ comparisons }) => {
   };
 
   return (
-    <Paper elevation={0} sx={{ bgcolor: '#1e1e1e' }}>
-      <List sx={{ width: '100%', bgcolor: '#1e1e1e' }}>
+    <Paper elevation={0} sx={{ bgcolor: 'white' }}>
+      <List sx={{ width: '100%', bgcolor: 'white' }}>
         {comparisons.items.map((item, index) => (
           <React.Fragment key={index}>
             <ListItem
               alignItems="flex-start"
               secondaryAction={
                 <IconButton onClick={() => toggleExpand(item.product)}>
-                  {expandedItems[item.product] ? <ExpandLess sx={{ color: '#fff' }} /> : <ExpandMore sx={{ color: '#fff' }} />}
+                  {expandedItems[item.product] ? <ExpandLess sx={{ color: '#1e293b' }} /> : <ExpandMore sx={{ color: '#1e293b' }} />}
                 </IconButton>
               }
               sx={{ 
-                bgcolor: '#1e1e1e',
-                '&:hover': { bgcolor: '#2d2d2d' }
+                bgcolor: 'white',
+                '&:hover': { bgcolor: '#f8fafc' }
               }}
             >
               <ListItemText
                 primary={
-                  <Typography variant="subtitle1" component="div" sx={{ fontWeight: 'bold', color: '#ffffff' }}>
+                  <Typography variant="subtitle1" component="div" sx={{ fontWeight: 'bold', color: '#1e293b' }}>
                     {item.product}
                   </Typography>
                 }
                 secondary={
                   <React.Fragment>
-                    <Typography component="span" variant="body2" sx={{ color: '#e0e0e0' }}>
+                    <Typography component="span" variant="body2" sx={{ color: '#64748b' }}>
                       Best Price: ${Number(item.bestPrice).toFixed(2)} at {item.bestStore}
                     </Typography>
                     {item.bestStoreDistance && (
                       <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5, gap: 1 }}>
-                        <LocationOn fontSize="small" sx={{ color: '#90caf9' }} />
-                        <Typography component="span" variant="body2" sx={{ color: '#bdbdbd' }}>
+                        <LocationOn fontSize="small" sx={{ color: '#3b82f6' }} />
+                        <Typography component="span" variant="body2" sx={{ color: '#64748b' }}>
                           {formatDistance(item.bestStoreDistance)}
                         </Typography>
                       </Box>
                     )}
-                    <Typography component="span" variant="body2" sx={{ color: '#4caf50', display: 'block', mt: 0.5 }}>
+                    <Typography component="span" variant="body2" sx={{ color: '#10b981', display: 'block', mt: 0.5 }}>
                       Potential Savings: ${Number(item.savings).toFixed(2)}
                     </Typography>
                   </React.Fragment>
@@ -82,25 +82,25 @@ const StoreComparisonCard = ({ comparisons }) => {
             </ListItem>
             
             <Collapse in={expandedItems[item.product]} timeout="auto" unmountOnExit>
-              <List component="div" disablePadding sx={{ bgcolor: '#2d2d2d' }}>
+              <List component="div" disablePadding sx={{ bgcolor: '#f8fafc' }}>
                 {item.allPrices && item.allPrices.map(([store, price, distance], priceIndex) => (
                   <ListItem key={priceIndex} sx={{ pl: 4, py: 0.5 }}>
                     <ListItemText
                       primary={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="body2" sx={{ color: '#e0e0e0' }}>
+                          <Typography variant="body2" sx={{ color: '#64748b' }}>
                             {store}: ${Number(price).toFixed(2)}
                           </Typography>
                           {distance && (
                             <Chip
                               size="small"
-                              icon={<LocationOn fontSize="small" sx={{ color: '#90caf9' }} />}
+                              icon={<LocationOn fontSize="small" sx={{ color: '#3b82f6' }} />}
                               label={formatDistance(distance)}
                               variant="outlined"
                               sx={{ 
-                                borderColor: '#666',
-                                color: '#bdbdbd',
-                                '& .MuiChip-icon': { color: '#90caf9' }
+                                borderColor: '#e2e8f0',
+                                color: '#64748b',
+                                '& .MuiChip-icon': { color: '#3b82f6' }
                               }}
                             />
                           )}
@@ -112,7 +112,7 @@ const StoreComparisonCard = ({ comparisons }) => {
               </List>
             </Collapse>
             
-            {index < comparisons.items.length - 1 && <Divider component="li" sx={{ borderColor: '#333' }} />}
+            {index < comparisons.items.length - 1 && <Divider component="li" sx={{ borderColor: '#e2e8f0' }} />}
           </React.Fragment>
         ))}
       </List>
@@ -120,18 +120,18 @@ const StoreComparisonCard = ({ comparisons }) => {
       <Box sx={{ 
         mt: 3, 
         p: 2, 
-        bgcolor: '#2d2d2d', 
-        color: '#ffffff',
+        bgcolor: '#f8fafc', 
+        color: '#1e293b',
         borderRadius: 1,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        border: '1px solid #333'
+        border: '1px solid #e2e8f0'
       }}>
-        <Typography variant="h6" sx={{ color: '#ffffff' }}>
+        <Typography variant="h6" sx={{ color: '#1e293b' }}>
           Total Best Price:
         </Typography>
-        <Typography variant="h6" sx={{ color: '#4caf50' }}>
+        <Typography variant="h6" sx={{ color: '#10b981' }}>
           ${Number(comparisons.totalBestPrice).toFixed(2)}
         </Typography>
       </Box>

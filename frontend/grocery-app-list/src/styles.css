@@ -3,8 +3,8 @@ body {
     font-family: "Arial", sans-serif;
     margin: 0;
     padding: 0;
-    background-color: #121212;
-    color: #ffffff;
+    background-color: #f8fafc;
+    color: #1e293b;
 }
 
 .container {
@@ -19,34 +19,35 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: #1e1e1e;
+    background: #ffffff;
     padding: 15px 20px;
     color: white;
-    border-bottom: 1px solid #333;
     position: relative;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .navbar h1 {
-    font-size: 24px;
-    color: #ffffff;
+    font-size: 27px;
+    color: #1e293b;
+    margin: 0;
 }
 
 .navbar nav {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 24px;
 }
 
 .navbar nav a {
-    color: #ffffff;
+    color: #1e293b;
     text-decoration: none;
     margin: 0 15px;
-    font-weight: bold;
+    font-weight: 500;
     transition: color 0.2s ease;
 }
 
 .navbar nav a:hover {
-    color: #90caf9;
+    color: #3b82f6;
 }
 
 /* Stores Dropdown Menu */

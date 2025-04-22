@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import API_BASE_URL from "./config";
-import { Container, Typography, Paper, Grid, Card, CardMedia, CardContent, Dialog, DialogContent, IconButton, Box } from "@mui/material";
+import { Container, Typography, Paper, Grid, Card, CardMedia, Dialog, DialogContent, IconButton, Box } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close"
 
 const StorePage = () => {
@@ -31,7 +31,13 @@ const StorePage = () => {
   }, [storeId]);
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 6 }}>
+    <Container maxWidth="lg" sx={{ 
+      mt: 4, 
+      mb: 6,
+      bgcolor: '#f8fafc',
+      minHeight: '100vh',
+      py: 4
+    }}>
       {storeData ? (
         <>
           {/* Store Name */}
@@ -39,9 +45,11 @@ const StorePage = () => {
             variant="h4" 
             gutterBottom 
             sx={{ 
-              color: '#ffffff',
+              color: '#1e293b',
               fontWeight: 600,
-              mb: 4
+              mb: 4,
+              letterSpacing: '0.5px',
+              textAlign: 'center'
             }}
           >
             {storeData.name}
@@ -54,15 +62,16 @@ const StorePage = () => {
               p: 3, 
               mb: 3, 
               borderRadius: 2,
-              bgcolor: '#1e1e1e',
-              border: '1px solid #333'
+              bgcolor: 'white',
+              border: '1px solid #e2e8f0',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
             }}
           >
             <Typography 
               variant="h5" 
               gutterBottom 
               sx={{ 
-                color: '#ffffff',
+                color: '#1e293b',
                 fontWeight: 600,
                 mb: 3
               }}
@@ -78,14 +87,14 @@ const StorePage = () => {
                         height: '100%',
                         display: 'flex',
                         flexDirection: 'column',
-                        bgcolor: '#2d2d2d',
-                        border: '1px solid #333',
+                        bgcolor: 'white',
+                        border: '1px solid #e2e8f0',
                         transition: 'transform 0.2s',
                         aspectRatio: '1/1',
                         position: 'relative',
                         '&:hover': {
                           transform: 'translateY(-5px)',
-                          bgcolor: '#3d3d3d'
+                          bgcolor: '#f8fafc'
                         }
                       }}
                     >
@@ -109,7 +118,7 @@ const StorePage = () => {
                           bottom: 0,
                           left: 0,
                           right: 0,
-                          background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%)',
+                          background: 'linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 100%)',
                           p: 1,
                           color: '#ffffff'
                         }}
@@ -134,7 +143,7 @@ const StorePage = () => {
                           <Typography 
                             variant="h6" 
                             sx={{ 
-                              color: '#4caf50',
+                              color: '#10b981',
                               fontWeight: 600,
                               fontSize: '0.9rem',
                               textShadow: '0 1px 2px rgba(0,0,0,0.5)'
@@ -146,7 +155,7 @@ const StorePage = () => {
                             variant="body2" 
                             sx={{ 
                               color: '#ffffff',
-                              bgcolor: 'rgba(0,0,0,0.5)',
+                              bgcolor: 'rgba(0,0,0,0.4)',
                               px: 0.75,
                               py: 0.25,
                               borderRadius: 1,
@@ -163,7 +172,7 @@ const StorePage = () => {
                 ))}
               </Grid>
             ) : (
-              <Typography sx={{ color: '#999' }}>No products available</Typography>
+              <Typography sx={{ color: '#64748b' }}>No products available</Typography>
             )}
           </Paper>
 
@@ -173,15 +182,16 @@ const StorePage = () => {
             sx={{ 
               p: 3, 
               borderRadius: 2,
-              bgcolor: '#1e1e1e',
-              border: '1px solid #333'
+              bgcolor: 'white',
+              border: '1px solid #e2e8f0',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)'
             }}
           >
             <Typography 
               variant="h5" 
               gutterBottom 
               sx={{ 
-                color: '#ffffff',
+                color: '#1e293b',
                 fontWeight: 600,
                 mb: 3
               }}
@@ -196,8 +206,11 @@ const StorePage = () => {
                       sx={{ 
                         cursor: 'pointer',
                         transition: 'transform 0.2s',
+                        bgcolor: 'white',
+                        border: '1px solid #e2e8f0',
                         '&:hover': {
-                          transform: 'scale(1.02)'
+                          transform: 'scale(1.02)',
+                          bgcolor: '#f8fafc'
                         }
                       }} 
                       onClick={() => setSelectedFlyer(flyer.image_url)}
@@ -213,7 +226,7 @@ const StorePage = () => {
                 ))}
               </Grid>
             ) : (
-              <Typography sx={{ color: '#999' }}>No flyers available</Typography>
+              <Typography sx={{ color: '#64748b' }}>No flyers available</Typography>
             )}
           </Paper>
 
@@ -224,8 +237,8 @@ const StorePage = () => {
             maxWidth="md"
             PaperProps={{
               sx: {
-                bgcolor: '#1e1e1e',
-                color: '#ffffff'
+                bgcolor: 'white',
+                color: '#1e293b'
               }
             }}
           >
@@ -236,9 +249,9 @@ const StorePage = () => {
                 position: "absolute", 
                 right: 8, 
                 top: 8, 
-                color: "#ffffff",
+                color: "#1e293b",
                 '&:hover': {
-                  bgcolor: '#333'
+                  bgcolor: '#f8fafc'
                 }
               }}
             >
@@ -260,7 +273,7 @@ const StorePage = () => {
           </Dialog>
         </>
       ) : (
-        <Typography variant="h6" sx={{ color: '#999' }}>
+        <Typography variant="h6" sx={{ color: '#64748b' }}>
           Loading store data...
         </Typography>
       )}
