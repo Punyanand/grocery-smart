@@ -6,7 +6,7 @@ from flask_cors import CORS # type: ignore
 import psycopg2 # type: ignore
 import urllib.parse as up
 from dotenv import load_dotenv
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from supabase import create_client
 from werkzeug.utils import secure_filename
 import time
@@ -17,20 +17,30 @@ from math import radians, sin, cos, sqrt, atan2
 import json
 import openai
 from youtube_search import YoutubeSearch
+import secrets
+import sqlite3
+from werkzeug.security import generate_password_hash, check_password_hash
 logging.basicConfig(level=logging.DEBUG)
 
 load_dotenv()
 
 app = Flask(__name__)
 
-CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True, allow_headers=["Content-Type"])
+# Configure CORS with specific options
+CORS(app, resources={r"/*": {
+    "origins": ["http://localhost:3000"],
+    "methods": ["GET", "POST", "OPTIONS"],
+    "allow_headers": ["Content-Type", "Authorization"],
+    "supports_credentials": True
+}})
 
 @app.after_request
 def add_cors_headers(response):
     """ Ensure CORS headers are applied to every response """
-    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 
 # PostgreSQL connection
@@ -781,6 +791,155 @@ def search_youtube_videos(query, max_results=2):
 @app.route('/')
 def home():
     return jsonify({"message": "Grocery Smart API is running!"})
+
+def init_db():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Create users table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Create user_sessions table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_sessions (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            session_token TEXT UNIQUE NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP NOT NULL
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+
+# Initialize database
+init_db()
+
+# User Authentication Endpoints
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+    
+    if not username or not email or not password:
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    # Hash password
+    password_hash = generate_password_hash(password)
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'INSERT INTO users (username, email, password_hash) VALUES (%s, %s, %s)',
+            (username, email, password_hash)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'message': 'User registered successfully'}), 201
+    except sqlite3.IntegrityError:
+        return jsonify({'error': 'Username or email already exists'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    email = data.get('email')
+    password = data.get('password')
+    
+    if not email or not password:
+        return jsonify({'error': 'Missing email or password'}), 400
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, username, password_hash FROM users WHERE email = %s', (email,))
+        user = cursor.fetchone()
+        conn.close()
+        
+        if not user or not check_password_hash(user[2], password):
+            return jsonify({'error': 'Invalid email or password'}), 401
+        
+        # Generate session token
+        session_token = secrets.token_hex(32)
+        expires_at = datetime.now() + timedelta(days=7)
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'INSERT INTO user_sessions (user_id, session_token, expires_at) VALUES (%s, %s, %s)',
+            (user[0], session_token, expires_at)
+        )
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'message': 'Login successful',
+            'session_token': session_token,
+            'username': user[1]
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/auth/logout', methods=['POST'])
+def logout():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'No valid authorization token provided'}), 401
+    
+    session_token = auth_header.split(' ')[1]
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM user_sessions WHERE session_token = %s', (session_token,))
+        conn.commit()
+        conn.close()
+        return jsonify({'message': 'Logged out successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/auth/verify', methods=['GET'])
+def verify_session():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'No valid authorization token provided'}), 401
+    
+    session_token = auth_header.split(' ')[1]
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT u.username, u.email 
+            FROM users u
+            JOIN user_sessions s ON u.id = s.user_id
+            WHERE s.session_token = %s AND s.expires_at > CURRENT_TIMESTAMP
+        ''', (session_token,))
+        user = cursor.fetchone()
+        conn.close()
+        
+        if not user:
+            return jsonify({'error': 'Invalid or expired session'}), 401
+        
+        return jsonify({
+            'username': user[0],
+            'email': user[1]
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
