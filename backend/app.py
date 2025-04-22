@@ -39,8 +39,10 @@ CORS(app, resources={
 @app.after_request
 def add_cors_headers(response):
     """ Ensure CORS headers are applied to every response """
-    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    origin = request.headers.get('Origin')
+    if origin in ["http://localhost:3000", "https://grocery-smart.vercel.app"]:
+        response.headers["Access-Control-Allow-Origin"] = origin
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
