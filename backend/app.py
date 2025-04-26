@@ -1,9 +1,10 @@
+
 from flask import Flask, request, jsonify
 import pandas as pd
 import os
 import re
-from flask_cors import CORS # type: ignore
-import psycopg2 # type: ignore
+from flask_cors import CORS  # type: ignore
+import psycopg2  # type: ignore
 import urllib.parse as up
 from dotenv import load_dotenv
 from datetime import datetime, timezone, timedelta
@@ -19,7 +20,9 @@ import openai
 from youtube_search import YoutubeSearch
 import secrets
 import sqlite3
+import re
 from werkzeug.security import generate_password_hash, check_password_hash
+
 logging.basicConfig(level=logging.DEBUG)
 
 load_dotenv()
@@ -36,6 +39,7 @@ CORS(app, resources={
     }
 })
 
+
 @app.after_request
 def add_cors_headers(response):
     """ Ensure CORS headers are applied to every response """
@@ -47,10 +51,12 @@ def add_cors_headers(response):
     response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 
+
 # PostgreSQL connection
 
 DB_CONFIG = os.getenv("DATABASE_URL")  # Use environment variable
 print("DB Config:", DB_CONFIG)
+
 
 def get_db_connection():
     if not DB_CONFIG:
@@ -77,10 +83,12 @@ def get_db_connection():
         print(f"Database connection failed: {e}")
         return None
 
+
 # Initialize Supabase
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 
 # Get list of all stores
 @app.route('/stores', methods=['GET'])
@@ -88,14 +96,15 @@ def get_stores():
     conn = get_db_connection()
     if not conn:
         return jsonify({"error": "Database connection failed"}), 500
-        
+
     cur = conn.cursor()
     cur.execute("SELECT * FROM stores ORDER BY id;")
     stores = [{"id": row[0], "name": row[1], "zip_code": row[2]} for row in cur.fetchall()]
     cur.close()
     conn.close()
-    
+
     return jsonify(stores)
+
 
 # Get store details, products, and flyers
 @app.route('/store/<int:store_id>', methods=['GET'])
@@ -133,8 +142,9 @@ def get_store_data(store_id):
     finally:
         cur.close()
         conn.close()
-   
-#Upload product data (Crowdsourced)
+
+
+# Upload product data (Crowdsourced)
 @app.route('/upload_product', methods=['POST'])
 def upload_product():
     data = request.json
@@ -190,7 +200,8 @@ def upload_product():
         cur.close()
         conn.close()
 
-#Upload flyer image
+
+# Upload flyer image
 @app.route('/upload_flyer', methods=['POST'])
 def upload_flyer():
     logging.debug(f"Request received: {request.form}, Files: {request.files}")
@@ -210,7 +221,7 @@ def upload_flyer():
     try:
         # Verify if Supabase Upload is Working
         # Convert file to binary before sending to Supabase
-        file_data = file.read()  
+        file_data = file.read()
 
         response = supabase.storage.from_("flyers").upload(
             f"{filename}",  # File path in storage
@@ -229,7 +240,7 @@ def upload_flyer():
             INSERT INTO flyers (store_id, image_url, uploaded_at) 
             VALUES (%s, %s, %s) RETURNING id;
         """, (store_id, image_url, updated_at))
-        
+
         flyer_id = cur.fetchone()
         if not flyer_id:
             print("Database insertion failed!")
@@ -240,10 +251,10 @@ def upload_flyer():
         conn.close()
 
         return jsonify({
-            "message": "Flyer uploaded successfully", 
-            "flyer_id": flyer_id[0], 
-            "store_id": store_id, 
-            "image_url": image_url, 
+            "message": "Flyer uploaded successfully",
+            "flyer_id": flyer_id[0],
+            "store_id": store_id,
+            "image_url": image_url,
             "updated_at": updated_at
         }), 201
 
@@ -251,6 +262,7 @@ def upload_flyer():
         print("Upload error:", str(e))
         traceback.print_exc()  # Prints full error traceback
         return jsonify({"error": str(e)}), 500
+
 
 # Function to get ZIP code coordinates
 def get_zip_coordinates(zip_code):
@@ -268,20 +280,22 @@ def get_zip_coordinates(zip_code):
         print(f"Error getting coordinates for ZIP code: {e}")
         return None
 
+
 # Calculate distance between two ZIP codes using Haversine formula
 def calculate_distance(lat1, lon1, lat2, lon2):
     R = 3959.87433  # Earth's radius in miles
 
     lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
-    
+
     dlat = lat2 - lat1
     dlon = lon2 - lon1
-    
-    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
-    c = 2 * atan2(sqrt(a), sqrt(1-a))
+
+    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
     distance = R * c
-    
+
     return round(distance, 2)
+
 
 # Get stores sorted by distance from user's ZIP code
 @app.route('/stores/by-distance/<user_zip>', methods=['GET'])
@@ -294,41 +308,42 @@ def get_stores_by_distance(user_zip):
 
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         # Get all stores
         cur.execute("SELECT id, name, zip_code FROM stores")
         stores = cur.fetchall()
-        
+
         # Calculate distances and sort stores
         stores_with_distance = []
         for store in stores:
             store_id, store_name, store_zip = store
             store_coords = get_zip_coordinates(store_zip)
-            
+
             if store_coords:
                 distance = calculate_distance(
                     user_coords["lat"], user_coords["lng"],
                     store_coords["lat"], store_coords["lng"]
                 )
-                
+
                 stores_with_distance.append({
                     "id": store_id,
                     "name": store_name,
                     "zip_code": store_zip,
                     "distance": distance
                 })
-        
+
         # Sort stores by distance
         stores_with_distance.sort(key=lambda x: x["distance"])
-        
+
         cur.close()
         conn.close()
-        
+
         return jsonify(stores_with_distance)
-    
+
     except Exception as e:
         print(f"Error in get_stores_by_distance: {e}")
         return jsonify({"error": str(e)}), 500
+
 
 # Modified compare_prices endpoint to include distance information
 @app.route('/api/compare-prices', methods=['POST'])
@@ -336,24 +351,24 @@ def compare_prices():
     try:
         data = request.get_json()
         print("Received request data:", data)  # Debug log
-        
+
         items = data.get('items', [])
         user_zip = data.get('userZip')
-        
+
         print(f"Processing items: {items}, user_zip: {user_zip}")  # Debug log
-        
+
         if not items:
             return jsonify({"error": "No items provided"}), 400
 
         conn = get_db_connection()
         if not conn:
             return jsonify({"error": "Database connection failed"}), 500
-            
+
         cur = conn.cursor()
-        
+
         # Create a placeholder string for the SQL IN clause
         items_placeholder = ','.join(['%s'] * len(items))
-        
+
         query = f"""
             SELECT p.name, s.name as store_name, p.price, s.zip_code
             FROM products p
@@ -361,25 +376,25 @@ def compare_prices():
             WHERE LOWER(p.name) IN ({items_placeholder})
             ORDER BY p.name, p.price ASC
         """
-        
+
         # Convert items to lowercase for case-insensitive comparison
         query_params = tuple(item.lower() for item in items)
         print(f"Executing query with params: {query_params}")  # Debug log
-        
+
         cur.execute(query, query_params)
         data = cur.fetchall()
         print(f"Query returned {len(data)} rows")  # Debug log
-        
+
         cur.close()
         conn.close()
 
         # Process data into best price format with actual savings calculation
         comparisons = {}
         total_best_price = 0
-        
+
         # Get user coordinates if ZIP provided
         user_coords = get_zip_coordinates(user_zip) if user_zip else None
-        
+
         # First pass to find the price range for each product
         for product_name, store_name, price, store_zip in data:
             store_distance = None
@@ -413,7 +428,7 @@ def compare_prices():
         for product_name, data in comparisons.items():
             savings = data["worstPrice"] - data["bestPrice"]
             total_best_price += data["bestPrice"]
-            
+
             result.append({
                 "product": product_name,
                 "bestStore": data["bestStore"],
@@ -435,14 +450,15 @@ def compare_prices():
         print("Traceback:", traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
+
 def optimize_shopping_stops(items, user_zip):
     try:
         print(f"Optimizing shopping stops for items: {items}")
         print(f"User ZIP: {user_zip}")
-        
+
         if not items:
             return {"error": "No items provided"}, 400
-            
+
         if not user_zip:
             return {"error": "ZIP code is required for optimization"}, 400
 
@@ -464,7 +480,7 @@ def optimize_shopping_stops(items, user_zip):
         """
         print(f"Executing query: {query}")
         print(f"With parameters: {[item.lower() for item in items]}")
-        
+
         cursor.execute(query, [item.lower() for item in items])
         prices = cursor.fetchall()
         print(f"Found {len(prices)} price entries")
@@ -502,11 +518,11 @@ def optimize_shopping_stops(items, user_zip):
         # Strategy 1: Price-optimized (best price for each item)
         price_optimized = find_price_optimized_stops(store_prices, items)
         print("Price optimized result:", price_optimized)
-        
+
         # Strategy 2: Distance-optimized (closest stores first)
         distance_optimized = find_distance_optimized_stops(store_prices, items)
         print("Distance optimized result:", distance_optimized)
-        
+
         # Strategy 3: Convenience-optimized (minimum stops)
         convenience_optimized = find_optimal_stops(store_prices, items)
         print("Convenience optimized result:", convenience_optimized)
@@ -544,6 +560,7 @@ def optimize_shopping_stops(items, user_zip):
         if 'conn' in locals():
             conn.close()
 
+
 def find_price_optimized_stops(store_prices, items):
     """Find the best price for each item, regardless of store."""
     result = {
@@ -552,15 +569,15 @@ def find_price_optimized_stops(store_prices, items):
         "total_distance": 0,
         "item_breakdown": {}
     }
-    
+
     print(f"Finding price-optimized stops for items: {items}")
     print(f"Available stores: {[store_data['name'] for store_data in store_prices.values()]}")
-    
+
     # Find best price for each item
     for item in items:
         best_price = float('inf')
         best_store = None
-        
+
         for store_id, store_data in store_prices.items():
             # Create case-insensitive mapping of items
             store_items = {k.lower(): (k, v) for k, v in store_data['items'].items()}
@@ -569,7 +586,7 @@ def find_price_optimized_stops(store_prices, items):
                 if price < best_price:
                     best_price = price
                     best_store = store_id
-        
+
         if best_store is not None:
             if best_store not in result["stores"]:
                 result["stores"].append(best_store)
@@ -579,13 +596,14 @@ def find_price_optimized_stops(store_prices, items):
                 "price": best_price
             }
             print(f"Found {item} at {store_prices[best_store]['name']} for ${best_price}")
-    
+
     # Calculate total distance
     for store_id in result["stores"]:
         result["total_distance"] += store_prices[store_id]["distance"]
-    
+
     print(f"Price-optimized result: {result}")
     return result
+
 
 def find_distance_optimized_stops(store_prices, items):
     """Find stores to visit based on distance, getting items from closest stores first."""
@@ -595,31 +613,31 @@ def find_distance_optimized_stops(store_prices, items):
         "total_distance": 0,
         "item_breakdown": {}
     }
-    
+
     print(f"Finding distance-optimized stops for items: {items}")
-    
+
     # Sort stores by distance
     sorted_stores = sorted(
         store_prices.items(),
         key=lambda x: x[1]['distance']
     )
-    
+
     remaining_items = set(items)
     print(f"Remaining items: {remaining_items}")
-    
+
     # Try to get items from closest stores first
     for store_id, store_data in sorted_stores:
         if not remaining_items:
             break
-            
+
         # Create case-insensitive mapping of items
         store_items = {k.lower(): (k, v) for k, v in store_data['items'].items()}
         available_items = {item for item in remaining_items if item.lower() in store_items}
-        
+
         if available_items:
             result["stores"].append(store_id)
             result["total_distance"] += store_data["distance"]
-            
+
             for item in available_items:
                 original_name, price = store_items[item.lower()]
                 result["total_cost"] += price
@@ -628,11 +646,12 @@ def find_distance_optimized_stops(store_prices, items):
                     "price": price
                 }
                 print(f"Found {item} at {store_data['name']} for ${price}")
-            
+
             remaining_items -= available_items
-    
+
     print(f"Distance-optimized result: {result}")
     return result
+
 
 def find_optimal_stops(store_prices, items):
     """Find the minimum number of stores to visit."""
@@ -642,9 +661,9 @@ def find_optimal_stops(store_prices, items):
         "total_distance": 0,
         "item_breakdown": {}
     }
-    
+
     print(f"Finding convenience-optimized stops for items: {items}")
-    
+
     # First, find stores that have the most items
     store_coverage = {}
     for store_id, store_data in store_prices.items():
@@ -653,32 +672,32 @@ def find_optimal_stops(store_prices, items):
         coverage = len({item for item in items if item.lower() in store_items})
         if coverage > 0:
             store_coverage[store_id] = coverage
-    
+
     print(f"Store coverage: {store_coverage}")
-    
+
     # Sort stores by coverage (descending) and then by distance
     sorted_stores = sorted(
         store_coverage.items(),
         key=lambda x: (-x[1], store_prices[x[0]]['distance'])
     )
-    
+
     remaining_items = set(items)
     print(f"Remaining items: {remaining_items}")
-    
+
     # Try to get items from stores with the most coverage first
     for store_id, _ in sorted_stores:
         if not remaining_items:
             break
-            
+
         store_data = store_prices[store_id]
         # Create case-insensitive mapping of items
         store_items = {k.lower(): (k, v) for k, v in store_data['items'].items()}
         available_items = {item for item in remaining_items if item.lower() in store_items}
-        
+
         if available_items:
             result["stores"].append(store_id)
             result["total_distance"] += store_data["distance"]
-            
+
             for item in available_items:
                 original_name, price = store_items[item.lower()]
                 result["total_cost"] += price
@@ -687,32 +706,34 @@ def find_optimal_stops(store_prices, items):
                     "price": price
                 }
                 print(f"Found {item} at {store_data['name']} for ${price}")
-            
+
             remaining_items -= available_items
-    
+
     print(f"Convenience-optimized result: {result}")
     return result
+
 
 @app.route('/api/optimize-stops', methods=['POST'])
 def optimize_stops():
     data = request.get_json()
     items = data.get('items', [])
     user_zip = data.get('userZip')
-    
+
     result = optimize_shopping_stops(items, user_zip)
     if isinstance(result, tuple):
         return jsonify(result[0]), result[1]
     return jsonify(result)
+
 
 @app.route('/api/recipe-search', methods=['POST'])
 def recipe_search():
     try:
         data = request.get_json()
         query = data.get('query')
-        
+
         if not query:
             return jsonify({'error': 'No search query provided'}), 400
-            
+
         # Generate recipe using OpenAI
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
@@ -734,11 +755,12 @@ def recipe_search():
                     "ingredients": ["drumsticks", "carrots", "potatoes", "eggplant", "onions", "tomatoes", "ginger", "garlic", "turmeric", "cumin"],
                     "instructions": ["Chop all vegetables...", "Heat oil in a pan..."]
                 }"""},
-                {"role": "user", "content": f"Give me a recipe for {query}. List each vegetable and ingredient separately without any grouping or categories."}
+                {"role": "user",
+                 "content": f"Give me a recipe for {query}. List each vegetable and ingredient separately without any grouping or categories."}
             ],
             temperature=0.7
         )
-        
+
         # Parse the response
         try:
             recipe_data = json.loads(response.choices[0].message.content)
@@ -750,33 +772,105 @@ def recipe_search():
                 "ingredients": [],
                 "instructions": []
             }
-            
+
             # Try to find the recipe name
             name_match = re.search(r'"name":\s*"([^"]+)"', content)
             if name_match:
                 recipe_data["name"] = name_match.group(1)
-            
+
             # Try to find ingredients array
             ingredients_match = re.search(r'"ingredients":\s*\[(.*?)\]', content, re.DOTALL)
             if ingredients_match:
                 ingredients_str = ingredients_match.group(1)
                 recipe_data["ingredients"] = [ing.strip(' "') for ing in ingredients_str.split(',')]
-            
+
             # Try to find instructions array
             instructions_match = re.search(r'"instructions":\s*\[(.*?)\]', content, re.DOTALL)
             if instructions_match:
                 instructions_str = instructions_match.group(1)
                 recipe_data["instructions"] = [inst.strip(' "') for inst in instructions_str.split(',')]
-        
+
         # Search for YouTube videos
         video_links = search_youtube_videos(f"{query} recipe")
         recipe_data["videoLinks"] = video_links
-        
+
         return jsonify(recipe_data)
-        
+
     except Exception as e:
         print(f"Error in recipe search: {str(e)}")
         return jsonify({'error': 'Failed to generate recipe'}), 500
+
+
+@app.route('/api/meal-prep-suggestion', methods=['POST'])
+def meal_prep_suggestion():
+    try:
+        data = request.get_json()
+        preferences = data.get('preferences', [])
+        ingredients = data.get('ingredients', [])
+
+        if not preferences or not ingredients:
+            return jsonify({'error': 'Missing preferences or ingredients'}), 400
+
+        preferences_str = ", ".join(preferences)
+        ingredients_str = ", ".join(ingredients)
+
+        # Generate meal prep suggestion using OpenAI
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": """You are a helpful meal planner. Create a 3-day meal prep plan based on the user's dietary preferences and available ingredients.
+
+            Respond in friendly text format, structured clearly with Day 1, Day 2, Day 3, Day 4 and Day 5.
+            List Breakfast, Lunch, Dinner ideas under each day.
+            Keep it realistic for meal prepping.
+            Meals should match the dietary preferences."""},
+                            {"role": "user", "content": f"""Create a 5-day meal prep plan for a {preferences_str} diet using these ingredients: {ingredients_str}.
+            Do not add ingredients not listed unless absolutely necessary."""}
+            ],
+            temperature=0.7
+        )
+
+        meal_plan_text = response.choices[0].message.content.strip()
+
+        # --- Auto-Generate YouTube videos ---
+        # Extract possible meal names (simple parsing)
+        meal_names = extract_meal_names(meal_plan_text)
+
+        # Search YouTube for each meal
+        meal_videos = []
+        for meal in meal_names:
+            search_results = search_youtube_videos(f"{meal} recipe", max_results=1)
+            if search_results:
+                meal_videos.append({
+                    "meal": meal,
+                    "video": search_results[0]
+                })
+
+        return jsonify({
+            'suggestion': meal_plan_text,
+            'videos': meal_videos
+        })
+
+    except Exception as e:
+        print(f"Error generating meal prep suggestion: {str(e)}")
+        return jsonify({'error': 'Failed to generate meal prep suggestion'}), 500
+
+def extract_meal_names(meal_plan_text):
+    """Extract likely meal names from meal plan text."""
+    meal_names = []
+    lines = meal_plan_text.split('\n')
+    for line in lines:
+        line = line.strip()
+        if line.lower().startswith(('breakfast:', 'lunch:', 'dinner:')):
+            # Extract meal name after the colon
+            parts = line.split(':', 1)
+            if len(parts) > 1:
+                meal_name = parts[1].strip()
+                if meal_name:
+                    meal_names.append(meal_name)
+    return meal_names
+
+
 
 def search_youtube_videos(query, max_results=2):
     try:
@@ -792,14 +886,16 @@ def search_youtube_videos(query, max_results=2):
         print(f"Error searching YouTube videos: {str(e)}")
         return []
 
+
 @app.route('/')
 def home():
     return jsonify({"message": "Grocery Smart API is running!"})
 
+
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Create users table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
@@ -810,7 +906,7 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
+
     # Create user_sessions table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_sessions (
@@ -821,12 +917,14 @@ def init_db():
             expires_at TIMESTAMP NOT NULL
         )
     ''')
-    
+
     conn.commit()
     conn.close()
 
+
 # Initialize database
 init_db()
+
 
 # User Authentication Endpoints
 @app.route('/api/auth/register', methods=['POST'])
@@ -835,13 +933,13 @@ def register():
     username = data.get('username')
     email = data.get('email')
     password = data.get('password')
-    
+
     if not username or not email or not password:
         return jsonify({'error': 'Missing required fields'}), 400
-    
+
     # Hash password
     password_hash = generate_password_hash(password)
-    
+
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -857,29 +955,30 @@ def register():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/api/auth/login', methods=['POST'])
 def login():
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
-    
+
     if not email or not password:
         return jsonify({'error': 'Missing email or password'}), 400
-    
+
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('SELECT id, username, password_hash FROM users WHERE email = %s', (email,))
         user = cursor.fetchone()
         conn.close()
-        
+
         if not user or not check_password_hash(user[2], password):
             return jsonify({'error': 'Invalid email or password'}), 401
-        
+
         # Generate session token
         session_token = secrets.token_hex(32)
         expires_at = datetime.now() + timedelta(days=7)
-        
+
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -888,7 +987,7 @@ def login():
         )
         conn.commit()
         conn.close()
-        
+
         return jsonify({
             'message': 'Login successful',
             'session_token': session_token,
@@ -897,14 +996,15 @@ def login():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/api/auth/logout', methods=['POST'])
 def logout():
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Bearer '):
         return jsonify({'error': 'No valid authorization token provided'}), 401
-    
+
     session_token = auth_header.split(' ')[1]
-    
+
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -915,14 +1015,15 @@ def logout():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/api/auth/verify', methods=['GET'])
 def verify_session():
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Bearer '):
         return jsonify({'error': 'No valid authorization token provided'}), 401
-    
+
     session_token = auth_header.split(' ')[1]
-    
+
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -934,16 +1035,17 @@ def verify_session():
         ''', (session_token,))
         user = cursor.fetchone()
         conn.close()
-        
+
         if not user:
             return jsonify({'error': 'Invalid or expired session'}), 401
-        
+
         return jsonify({
             'username': user[0],
             'email': user[1]
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
