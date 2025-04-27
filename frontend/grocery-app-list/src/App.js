@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
@@ -11,6 +10,7 @@ import StorePage from './StorePage';
 import RecipeSearch from './components/RecipeSearch';
 import UploadPage from './UploadPage';
 import Navbar from './Navbar';
+import MealPrepPage from './MealPrepPage';
 
 const theme = createTheme({
   palette: {
@@ -150,6 +150,15 @@ function App() {
               <ProtectedRoute>
                 <Navbar />
                 <UploadPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/meal-prep"
+            element={
+              <ProtectedRoute>
+                <Navbar />
+                <MealPrepPage groceryList={groceryList} />
               </ProtectedRoute>
             }
           />
