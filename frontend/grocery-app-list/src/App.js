@@ -10,6 +10,7 @@ import StorePage from './StorePage';
 import RecipeSearch from './components/RecipeSearch';
 import UploadPage from './UploadPage';
 import Navbar from './Navbar';
+import MealPrepPage from './MealPrepPage';
 
 const theme = createTheme({
   palette: {
@@ -149,6 +150,15 @@ function App() {
               <ProtectedRoute>
                 <Navbar />
                 <UploadPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/meal-prep"
+            element={
+              <ProtectedRoute>
+                <Navbar />
+                <MealPrepPage groceryList={groceryList} />
               </ProtectedRoute>
             }
           />

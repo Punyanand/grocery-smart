@@ -1,6 +1,8 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AppBar, Toolbar, Typography, Button, Box } from '@mui/material';
+import { AppBar, Toolbar, Typography, Button, Box, IconButton } from '@mui/material';
+import { motion } from 'framer-motion';
+import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
 import API_BASE_URL from './config';
 
 const Navbar = () => {
@@ -42,7 +44,7 @@ const Navbar = () => {
         >
           Grocery Smart 🛒
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Button
             color="inherit"
             component={Link}
@@ -64,6 +66,19 @@ const Navbar = () => {
           >
             Upload
           </Button>
+          <motion.div
+            whileHover={{ scale: 1.2, rotate: 10 }}
+            whileTap={{ scale: 0.9 }}
+            style={{ display: 'inline-block' }}
+          >
+            <IconButton
+              component={Link}
+              to="/meal-prep"
+              color="inherit"
+            >
+              <RestaurantMenuIcon sx={{ fontSize: 30 }} />
+            </IconButton>
+          </motion.div>
           {username && (
             <Button
               color="inherit"
@@ -78,4 +93,4 @@ const Navbar = () => {
   );
 };
 
-export default Navbar; 
+export default Navbar;
