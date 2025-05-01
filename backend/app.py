@@ -1,4 +1,3 @@
-
 from flask import Flask, request, jsonify
 import pandas as pd
 import os
@@ -345,7 +344,49 @@ def get_stores_by_distance(user_zip):
         return jsonify({"error": str(e)}), 500
 
 
-# Modified compare_prices endpoint to include distance information
+# Product synonyms mapping
+PRODUCT_SYNONYMS = {
+    "onion": ["onions", "red onion", "yellow onion", "white onion"],
+    "okra": ["ladies finger", "lady finger", "bhindi"],
+    "coriander": ["dhania", "coriander leaves", "cilantro"],
+    "chickpeas": ["chana", "chole", "chana dal"],
+    "cumin": ["cumin seeds", "jeera"],
+    "methi": ["fenugreek seeds", "fenugreek"],
+    "turmeric": ["haldi", "turmeric powder"],
+    "karela": ["bitter gourd"],
+    "lauki": ["bottle gourd"],
+    "tamarind": ["tamarind paste", "tamarind concentrate"],
+    "curry leaves": ["kadi patta", "kari patta"],
+    "green chili": ["green chilli", "hari mirch", "chillies", "chilli"],
+    "basmati rice": ["basmati"],
+    "toor dal": ["arhar dal", "pigeon pea"],
+    "atta": ["wheat flour"],
+    "garam masala": ["garam masala powder"],
+    "paneer": ["cottage cheese"],
+    "ghee": ["clarified butter"],
+    "maggi noodles": ["maggi", "instant noodles"],
+    "idli rice": ["idli rava"],
+    "sambar powder": ["sambar masala"],
+    "amchur powder": ["dry mango powder", "amchur"],
+    "cinnamon sticks": ["cinnamon", "dalchini"],
+    "mustard seeds": ["rai", "sarson"],
+    "coriander powder": ["dhania powder"],
+    "red chili powder": ["red chilli powder", "lal mirch powder"]
+}
+
+def get_product_synonyms(product_name):
+    """Get all possible names for a product including synonyms"""
+    product_name = product_name.lower().strip()
+    synonyms = [product_name]
+    
+    # Check if the product is in our synonyms mapping
+    for key, values in PRODUCT_SYNONYMS.items():
+        if product_name == key or product_name in values:
+            synonyms.extend([key] + values)
+            break
+    
+    return list(set(synonyms))  # Remove duplicates
+
 @app.route('/api/compare-prices', methods=['POST'])
 def compare_prices():
     try:
@@ -366,8 +407,14 @@ def compare_prices():
 
         cur = conn.cursor()
 
+        # Get all possible names for each item
+        all_item_names = []
+        for item in items:
+            synonyms = get_product_synonyms(item)
+            all_item_names.extend(synonyms)
+
         # Create a placeholder string for the SQL IN clause
-        items_placeholder = ','.join(['%s'] * len(items))
+        items_placeholder = ','.join(['%s'] * len(all_item_names))
 
         query = f"""
             SELECT p.name, s.name as store_name, p.price, s.zip_code
@@ -378,7 +425,7 @@ def compare_prices():
         """
 
         # Convert items to lowercase for case-insensitive comparison
-        query_params = tuple(item.lower() for item in items)
+        query_params = tuple(item.lower() for item in all_item_names)
         print(f"Executing query with params: {query_params}")  # Debug log
 
         cur.execute(query, query_params)
@@ -406,31 +453,40 @@ def compare_prices():
                         store_coords["lat"], store_coords["lng"]
                     )
 
-            if product_name not in comparisons:
-                comparisons[product_name] = {
+            # Find the original item name that matches this product
+            original_item = None
+            for item in items:
+                if product_name.lower() in get_product_synonyms(item):
+                    original_item = item
+                    break
+
+            if original_item not in comparisons:
+                comparisons[original_item] = {
                     "bestStore": store_name,
                     "bestPrice": float(price),  # Convert to float
                     "worstPrice": float(price),  # Convert to float
                     "bestStoreDistance": store_distance,
-                    "allPrices": [(store_name, float(price), store_distance)]  # Convert to float
+                    "allPrices": [(store_name, float(price), store_distance)],  # Convert to float
+                    "foundAs": product_name  # Track what name the product was found as
                 }
             else:
-                comparisons[product_name]["allPrices"].append((store_name, float(price), store_distance))
-                if price < comparisons[product_name]["bestPrice"]:
-                    comparisons[product_name]["bestPrice"] = float(price)
-                    comparisons[product_name]["bestStore"] = store_name
-                    comparisons[product_name]["bestStoreDistance"] = store_distance
-                if price > comparisons[product_name]["worstPrice"]:
-                    comparisons[product_name]["worstPrice"] = float(price)
+                comparisons[original_item]["allPrices"].append((store_name, float(price), store_distance))
+                if price < comparisons[original_item]["bestPrice"]:
+                    comparisons[original_item]["bestPrice"] = float(price)
+                    comparisons[original_item]["bestStore"] = store_name
+                    comparisons[original_item]["bestStoreDistance"] = store_distance
+                if price > comparisons[original_item]["worstPrice"]:
+                    comparisons[original_item]["worstPrice"] = float(price)
 
         # Calculate savings and format response
         result = []
-        for product_name, data in comparisons.items():
+        for item, data in comparisons.items():
             savings = data["worstPrice"] - data["bestPrice"]
             total_best_price += data["bestPrice"]
 
             result.append({
-                "product": product_name,
+                "product": item,
+                "foundAs": data["foundAs"],  # Include what name the product was found as
                 "bestStore": data["bestStore"],
                 "bestPrice": data["bestPrice"],
                 "bestStoreDistance": data["bestStoreDistance"],
@@ -470,8 +526,14 @@ def optimize_shopping_stops(items, user_zip):
         if not user_coords:
             return {"error": "Invalid ZIP code"}, 400
 
+        # Get all possible names for each item including synonyms
+        all_item_names = []
+        for item in items:
+            synonyms = get_product_synonyms(item)
+            all_item_names.extend(synonyms)
+
         # Get prices for all items at all stores
-        placeholders = ','.join(['%s'] * len(items))
+        placeholders = ','.join(['%s'] * len(all_item_names))
         query = f"""
             SELECT p.store_id, p.name as product_name, p.price, s.name as store_name, s.zip_code
             FROM products p
@@ -479,9 +541,9 @@ def optimize_shopping_stops(items, user_zip):
             WHERE LOWER(p.name) IN ({placeholders})
         """
         print(f"Executing query: {query}")
-        print(f"With parameters: {[item.lower() for item in items]}")
+        print(f"With parameters: {[item.lower() for item in all_item_names]}")
 
-        cursor.execute(query, [item.lower() for item in items])
+        cursor.execute(query, [item.lower() for item in all_item_names])
         prices = cursor.fetchall()
         print(f"Found {len(prices)} price entries")
 
@@ -577,15 +639,25 @@ def find_price_optimized_stops(store_prices, items):
     for item in items:
         best_price = float('inf')
         best_store = None
+        found_as = None
+
+        # Get all possible names for this item
+        item_synonyms = get_product_synonyms(item)
+        print(f"Searching for {item} with synonyms: {item_synonyms}")
 
         for store_id, store_data in store_prices.items():
             # Create case-insensitive mapping of items
             store_items = {k.lower(): (k, v) for k, v in store_data['items'].items()}
-            if item.lower() in store_items:
-                original_name, price = store_items[item.lower()]
-                if price < best_price:
-                    best_price = price
-                    best_store = store_id
+            
+            # Check each synonym
+            for synonym in item_synonyms:
+                if synonym.lower() in store_items:
+                    original_name, price = store_items[synonym.lower()]
+                    if price < best_price:
+                        best_price = price
+                        best_store = store_id
+                        found_as = original_name
+                        print(f"Found {item} as {original_name} at {store_data['name']} for ${price}")
 
         if best_store is not None:
             if best_store not in result["stores"]:
@@ -593,9 +665,10 @@ def find_price_optimized_stops(store_prices, items):
             result["total_cost"] += best_price
             result["item_breakdown"][item] = {
                 "store": store_prices[best_store]["name"],
-                "price": best_price
+                "price": best_price,
+                "found_as": found_as
             }
-            print(f"Found {item} at {store_prices[best_store]['name']} for ${best_price}")
+            print(f"Best price for {item} found at {store_prices[best_store]['name']} for ${best_price}")
 
     # Calculate total distance
     for store_id in result["stores"]:
@@ -632,22 +705,29 @@ def find_distance_optimized_stops(store_prices, items):
 
         # Create case-insensitive mapping of items
         store_items = {k.lower(): (k, v) for k, v in store_data['items'].items()}
-        available_items = {item for item in remaining_items if item.lower() in store_items}
+        
+        # Check each remaining item and its synonyms
+        found_items = set()
+        for item in list(remaining_items):
+            item_synonyms = get_product_synonyms(item)
+            for synonym in item_synonyms:
+                if synonym.lower() in store_items:
+                    original_name, price = store_items[synonym.lower()]
+                    found_items.add(item)
+                    if item not in result["item_breakdown"]:
+                        result["item_breakdown"][item] = {
+                            "store": store_data["name"],
+                            "price": price,
+                            "found_as": original_name
+                        }
+                    result["total_cost"] += price
+                    print(f"Found {item} as {original_name} at {store_data['name']} for ${price}")
+                    break
 
-        if available_items:
+        if found_items:
             result["stores"].append(store_id)
             result["total_distance"] += store_data["distance"]
-
-            for item in available_items:
-                original_name, price = store_items[item.lower()]
-                result["total_cost"] += price
-                result["item_breakdown"][item] = {
-                    "store": store_data["name"],
-                    "price": price
-                }
-                print(f"Found {item} at {store_data['name']} for ${price}")
-
-            remaining_items -= available_items
+            remaining_items -= found_items
 
     print(f"Distance-optimized result: {result}")
     return result
@@ -669,7 +749,11 @@ def find_optimal_stops(store_prices, items):
     for store_id, store_data in store_prices.items():
         # Create case-insensitive mapping of items
         store_items = {k.lower(): (k, v) for k, v in store_data['items'].items()}
-        coverage = len({item for item in items if item.lower() in store_items})
+        coverage = 0
+        for item in items:
+            item_synonyms = get_product_synonyms(item)
+            if any(synonym.lower() in store_items for synonym in item_synonyms):
+                coverage += 1
         if coverage > 0:
             store_coverage[store_id] = coverage
 
@@ -692,22 +776,29 @@ def find_optimal_stops(store_prices, items):
         store_data = store_prices[store_id]
         # Create case-insensitive mapping of items
         store_items = {k.lower(): (k, v) for k, v in store_data['items'].items()}
-        available_items = {item for item in remaining_items if item.lower() in store_items}
+        
+        # Check each remaining item and its synonyms
+        found_items = set()
+        for item in list(remaining_items):
+            item_synonyms = get_product_synonyms(item)
+            for synonym in item_synonyms:
+                if synonym.lower() in store_items:
+                    original_name, price = store_items[synonym.lower()]
+                    found_items.add(item)
+                    if item not in result["item_breakdown"]:
+                        result["item_breakdown"][item] = {
+                            "store": store_data["name"],
+                            "price": price,
+                            "found_as": original_name
+                        }
+                    result["total_cost"] += price
+                    print(f"Found {item} as {original_name} at {store_data['name']} for ${price}")
+                    break
 
-        if available_items:
+        if found_items:
             result["stores"].append(store_id)
             result["total_distance"] += store_data["distance"]
-
-            for item in available_items:
-                original_name, price = store_items[item.lower()]
-                result["total_cost"] += price
-                result["item_breakdown"][item] = {
-                    "store": store_data["name"],
-                    "price": price
-                }
-                print(f"Found {item} at {store_data['name']} for ${price}")
-
-            remaining_items -= available_items
+            remaining_items -= found_items
 
     print(f"Convenience-optimized result: {result}")
     return result
