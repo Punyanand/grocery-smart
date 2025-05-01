@@ -7,6 +7,7 @@ import LocalGroceryStoreIcon from '@mui/icons-material/LocalGroceryStore';
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
 import RestaurantIcon from '@mui/icons-material/Restaurant';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(6),
@@ -194,10 +195,10 @@ const LandingPage = () => {
               </Typography>
             </FeatureCard>
           </Grid>
-          {/* Second row with 2 cards, centered */}
+          {/* Second row with 3 cards, centered */}
           <Grid item xs={12} sx={{ mt: { xs: 2, md: 4 }, display: 'flex', justifyContent: 'center' }}>
-            <Grid container spacing={4} sx={{ maxWidth: '800px' }}>
-              <Grid item xs={12} md={6}>
+            <Grid container spacing={4} sx={{ maxWidth: '1200px' }}>
+              <Grid item xs={12} md={4}>
                 <FeatureCard>
                   <RestaurantIcon sx={{ fontSize: 40, color: '#1a237e', mb: 2 }} />
                   <Typography variant="h5" gutterBottom sx={{ color: '#1a237e', fontWeight: 'bold' }}>
@@ -208,7 +209,18 @@ const LandingPage = () => {
                   </Typography>
                 </FeatureCard>
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12} md={4}>
+                <FeatureCard>
+                  <CalendarMonthIcon sx={{ fontSize: 40, color: '#1a237e', mb: 2 }} />
+                  <Typography variant="h5" gutterBottom sx={{ color: '#1a237e', fontWeight: 'bold' }}>
+                    Meal Planning
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: '#455a64' }}>
+                    Get personalized 5-day meal plans based on items in your pantry and grocery list. Save time and reduce food waste with smart meal suggestions.
+                  </Typography>
+                </FeatureCard>
+              </Grid>
+              <Grid item xs={12} md={4}>
                 <FeatureCard>
                   <CloudUploadIcon sx={{ fontSize: 40, color: '#1a237e', mb: 2 }} />
                   <Typography variant="h5" gutterBottom sx={{ color: '#1a237e', fontWeight: 'bold' }}>
