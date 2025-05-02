@@ -36,7 +36,6 @@ A smart grocery shopping application that helps users find the best prices, opti
 
 ### Prerequisites
 - Python 3.8+
-- Node.js 16+
 - PostgreSQL
 - OpenAI API key
 - YouTube Data API key
